@@ -1,4 +1,4 @@
-# Rajan Downloader 🎬
+# YtMax 🎬
 
 A standalone, high-performance Android application built with **Jetpack Compose** and an **embedded CPython + yt-dlp + FFmpeg runtime** for downloading YouTube videos up to 8K Ultra HD entirely on-device.
 
@@ -60,8 +60,8 @@ Embedded CPython 3.11 Runtime (/system/bin/linker64)
 ### Build APK
 ```bash
 # Clone the repository
-git clone https://github.com/<your-username>/rajan-downloader.git
-cd rajan-downloader
+git clone https://github.com/<your-username>/ytmax.git
+cd ytmax
 
 # Assemble Debug APK
 ./gradlew assembleDebug
@@ -81,4 +81,3 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 
 ## 📄 License
 This project is licensed under the MIT License - see the LICENSE file for details.
-

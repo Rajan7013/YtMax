@@ -1,23 +1,32 @@
 *.iml
-.gradle
+.gradle/
+.kotlin/
+.idea/
+*.log
+
+# Local SDK and user properties
+local.properties
 /local.properties
-/.idea
 .DS_Store
-/build
+
+# Build outputs and caches
+build/
+app/build/
+**/build/
 /captures
 .externalNativeBuild
 .cxx
-local.properties
-.kotlin
 
-# App build outputs
-app/build/
-**/build/
+# Temporary test files
+test_*
+test_run.sh
+screen*.png
+app_screenshot*.png
+downloaded_test.mp4
 
-# Keystores
+# Keystores & sensitive data
 *.jks
 *.keystore
-
-# Google Services
 google-services.json
-
+user_cookies.txt
+cookies.txt
