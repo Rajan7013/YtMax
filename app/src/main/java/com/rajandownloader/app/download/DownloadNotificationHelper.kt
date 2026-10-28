@@ -63,9 +63,14 @@ class DownloadNotificationHelper(private val context: Context) {
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
 
+        val appIcon = runCatching {
+            android.graphics.BitmapFactory.decodeResource(context.resources, com.rajandownloader.app.R.mipmap.ic_launcher)
+        }.getOrNull()
+
         val builder = NotificationCompat.Builder(context, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.stat_sys_download)
-            .setContentTitle(title.ifEmpty { "Downloading Media" })
+            .setLargeIcon(appIcon)
+            .setContentTitle(title.ifEmpty { "YtMax Downloader" })
             .setContentIntent(openPendingIntent)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
