@@ -1,0 +1,152 @@
+#!/system/bin/sh
+# Masks QuickJS as Node.js for yt-dlp on Android
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+LINKER="/system/bin/linker64"
+if [ ! -x "$LINKER" ]; then
+  LINKER="/system/bin/linker"
+fi
+
+QJS="${YTDLP_QJS_PATH:-${SCRIPT_DIR}/qjs}"
+if [ ! -f "$QJS" ] || [ ! -x "$QJS" ]; then
+    QJS_LIB="$(find /data/app -name "libqjs.so" 2>/dev/null | head -n 1)"
+    if [ -n "$QJS_LIB" ] && [ -f "$QJS_LIB" ]; then
+        QJS="$QJS_LIB"
+    fi
+fi
+LD_PATH="${SCRIPT_DIR}"
+
+if [ ! -f "$QJS" ]; then
+    echo "ERROR: qjs not found at $QJS" >&2
+    exit 1
+fi
+
+NODE_POLYFILL='
+if (typeof globalThis.process === "undefined") {
+    globalThis.process = {
+        argv: typeof scriptArgs !== "undefined" ? scriptArgs : [],
+        exit: function(c) { std.exit(c || 0); },
+        stdout: { write: function(s) { std.out.puts(s); std.out.flush(); } },
+        stderr: { write: function(s) { std.err.puts(s); std.err.flush(); } },
+        version: "v20.18.0-quickjs"
+    };
+}
+if (typeof globalThis.console === "undefined") {
+    globalThis.console = {
+        log: function() {
+            for (var i = 0; i < arguments.length; i++) {
+                if (i > 0) std.out.puts(" ");
+                std.out.puts(String(arguments[i]));
+            }
+            std.out.puts("\n");
+            std.out.flush();
+        },
+        error: function() {
+            for (var i = 0; i < arguments.length; i++) {
+                if (i > 0) std.err.puts(" ");
+                std.err.puts(String(arguments[i]));
+            }
+            std.err.puts("\n");
+            std.err.flush();
+        },
+        warn: function() {
+            for (var i = 0; i < arguments.length; i++) {
+                if (i > 0) std.err.puts(" ");
+                std.err.puts(String(arguments[i]));
+            }
+            std.err.puts("\n");
+            std.err.flush();
+        }
+    };
+}
+'
+
+run_qjs() {
+    export LD_LIBRARY_PATH="$LD_PATH"
+    exec "$QJS" "$@"
+}
+
+if [ "${1:-}" = "--version" ] || [ "${1:-}" = "-v" ]; then
+    echo "v20.18.0"
+    exit 0
+fi
+
+if [ "${1:-}" = "-e" ]; then
+    shift
+    run_qjs --std -e "${NODE_POLYFILL}$1"
+fi
+
+if [ "${1:-}" = "-p" ]; then
+    shift
+    run_qjs --std -e "${NODE_POLYFILL}console.log($1)"
+fi
+
+NODE_ARGS=""
+STDIN_MODE=0
+SCRIPT_FILE=""
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --experimental-permission|--permission)
+            shift
+            ;;
+        --no-warnings=ExperimentalWarning)
+            shift
+            ;;
+        --v8-flags=--jitless)
+            shift
+            ;;
+        -)
+            STDIN_MODE=1
+            shift
+            break
+            ;;
+        --)
+            shift
+            break
+            ;;
+        -*)
+            shift
+            ;;
+        *)
+            SCRIPT_FILE="$1"
+            shift
+            break
+            ;;
+    esac
+done
+
+if [ "$STDIN_MODE" = "1" ]; then
+    TMPFILE="$(mktemp /data/local/tmp/qjs_stdin_XXXXXX.js 2>/dev/null)"
+    if [ -z "$TMPFILE" ]; then
+        TMPFILE="${SCRIPT_DIR}/qjs_stdin_tmp.js"
+    fi
+    trap "rm -f '$TMPFILE'" EXIT
+    printf '%s\n' "$NODE_POLYFILL" > "$TMPFILE"
+    cat >> "$TMPFILE"
+    run_qjs --std "$TMPFILE"
+fi
+
+if [ -n "$SCRIPT_FILE" ]; then
+    TMPFILE="$(mktemp /data/local/tmp/qjs_script_XXXXXX.js 2>/dev/null)"
+    if [ -z "$TMPFILE" ]; then
+        TMPFILE="${SCRIPT_DIR}/qjs_script_tmp.js"
+    fi
+    trap "rm -f '$TMPFILE'" EXIT
+    printf '%s\n' "$NODE_POLYFILL" > "$TMPFILE"
+    cat "$SCRIPT_FILE" >> "$TMPFILE"
+    run_qjs --std "$TMPFILE" "$@"
+fi
+
+if [ ! -t 0 ]; then
+    TMPFILE="$(mktemp /data/local/tmp/qjs_stdin_XXXXXX.js 2>/dev/null)"
+    if [ -z "$TMPFILE" ]; then
+        TMPFILE="${SCRIPT_DIR}/qjs_stdin_tmp.js"
+    fi
+    trap "rm -f '$TMPFILE'" EXIT
+    printf '%s\n' "$NODE_POLYFILL" > "$TMPFILE"
+    cat >> "$TMPFILE"
+    run_qjs --std "$TMPFILE"
+fi
+
+run_qjs --std -i
