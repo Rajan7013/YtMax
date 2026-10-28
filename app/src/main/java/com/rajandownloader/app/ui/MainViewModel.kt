@@ -5,10 +5,12 @@ import android.util.Log
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.rajandownloader.app.RajanApp
+import com.rajandownloader.app.download.DownloadHistoryManager
 import com.rajandownloader.app.download.DownloadService
 import com.rajandownloader.app.model.DownloadJob
 import com.rajandownloader.app.model.DownloadProgress
 import com.rajandownloader.app.model.DownloadStage
+import com.rajandownloader.app.model.DownloadedItem
 import com.rajandownloader.app.model.MediaMetadata
 import com.rajandownloader.app.model.VideoOption
 import com.rajandownloader.app.runtime.PythonProcessRunner
@@ -28,9 +30,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val runtimeManager: RuntimeManager = (application as RajanApp).runtimeManager
     val preferences = AppPreferences(application)
+    private val historyManager = DownloadHistoryManager.getInstance(application)
 
     val currentProgress: StateFlow<DownloadProgress> = DownloadService.currentProgress
     val activeJob: StateFlow<DownloadJob?> = DownloadService.activeJob
+    val downloadHistory: StateFlow<List<DownloadedItem>> = historyManager.items
 
     val destinationUri: StateFlow<String?> = preferences.destinationUri.stateIn(
         viewModelScope, SharingStarted.WhileSubscribed(5000), null
@@ -260,9 +264,62 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 mode = if (mode == "audio") "audio_only" else mode,
                 container = container,
                 destinationUri = destUri,
-                cookiesPath = customCookies
+                cookiesPath = customCookies,
+                videoId = meta.id,
+                uploader = meta.uploader,
+                duration = meta.duration,
+                formattedDuration = meta.formattedDuration,
+                description = meta.description,
+                tags = ArrayList(meta.tags),
+                thumbnailUrl = meta.thumbnail
             )
         }
+    }
+
+    fun deleteHistoryItems(items: List<DownloadedItem>) {
+        viewModelScope.launch {
+            historyManager.deleteItems(items)
+        }
+    }
+
+    fun deleteThumbnailOnly(item: DownloadedItem) {
+        viewModelScope.launch {
+            historyManager.deleteThumbnailOnly(item)
+        }
+    }
+
+    fun deleteThumbnailsOnly(items: List<DownloadedItem>) {
+        viewModelScope.launch {
+            historyManager.deleteThumbnailsOnly(items)
+        }
+    }
+
+    fun renameItem(item: DownloadedItem, newNameWithoutExt: String, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = historyManager.renameItem(item, newNameWithoutExt)
+            onComplete(result.isSuccess)
+        }
+    }
+
+    fun renameThumbnail(item: DownloadedItem, newNameWithoutExt: String, onComplete: (Boolean) -> Unit = {}) {
+        viewModelScope.launch {
+            val result = historyManager.renameThumbnail(item, newNameWithoutExt)
+            onComplete(result.isSuccess)
+        }
+    }
+
+    suspend fun saveThumbnailToGallery(item: DownloadedItem): Boolean {
+        val result = historyManager.saveDownloadedThumbnail(
+            thumbnailUrl = item.thumbnailUrl,
+            videoId = item.videoId,
+            title = item.title,
+            cachedLocalPath = item.localThumbnailPath
+        )
+        if (result != null && item.localThumbnailPath == null) {
+            val updated = item.copy(localThumbnailPath = result)
+            historyManager.addItem(updated)
+        }
+        return result != null
     }
 
     fun cancelDownload() {

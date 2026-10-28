@@ -60,6 +60,41 @@ data class DownloadJob(
     val option: VideoOption,
     val container: String = "mp4",
     val outputPath: String? = null,
-    val errorDetails: String? = null
+    val errorDetails: String? = null,
+    val videoId: String = "",
+    val uploader: String = "",
+    val duration: Long = 0L,
+    val formattedDuration: String = "",
+    val description: String = "",
+    val tags: List<String> = emptyList(),
+    val thumbnailUrl: String? = null
 )
+
+data class DownloadedItem(
+    val id: String = java.util.UUID.randomUUID().toString(),
+    val videoId: String = "",
+    val title: String,
+    val uploader: String = "Unknown Channel",
+    val duration: Long = 0L,
+    val formattedDuration: String = "",
+    val description: String = "",
+    val tags: List<String> = emptyList(),
+    val thumbnailUrl: String? = null,
+    val localThumbnailPath: String? = null,
+    val isVideo: Boolean = true,
+    val formatLabel: String = "Merged",
+    val container: String = "mp4",
+    val fileSizeFormatted: String = "Unknown",
+    val fileSizeBytes: Long = 0L,
+    val fileUriString: String = "",
+    val localFilePath: String = "",
+    val timestamp: Long = System.currentTimeMillis()
+) {
+    val fileExtension: String
+        get() = if (localFilePath.isNotEmpty()) {
+            java.io.File(localFilePath).extension.ifEmpty { container }
+        } else {
+            container
+        }
+}
 

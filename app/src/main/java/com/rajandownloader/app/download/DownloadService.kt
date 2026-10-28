@@ -10,6 +10,7 @@ import android.util.Log
 import com.rajandownloader.app.model.DownloadJob
 import com.rajandownloader.app.model.DownloadProgress
 import com.rajandownloader.app.model.DownloadStage
+import com.rajandownloader.app.model.DownloadedItem
 import com.rajandownloader.app.model.VideoOption
 import com.rajandownloader.app.runtime.PythonProcessRunner
 import com.rajandownloader.app.runtime.RuntimeManager
@@ -47,7 +48,14 @@ class DownloadService : Service() {
             mode: String,
             container: String,
             destinationUri: String?,
-            cookiesPath: String?
+            cookiesPath: String?,
+            videoId: String = "",
+            uploader: String = "",
+            duration: Long = 0L,
+            formattedDuration: String = "",
+            description: String = "",
+            tags: ArrayList<String> = arrayListOf(),
+            thumbnailUrl: String? = null
         ) {
             val intent = Intent(context, DownloadService::class.java).apply {
                 action = ACTION_START
@@ -60,6 +68,13 @@ class DownloadService : Service() {
                 putExtra("container", container)
                 putExtra("destinationUri", destinationUri)
                 putExtra("cookiesPath", cookiesPath)
+                putExtra("videoId", videoId)
+                putExtra("uploader", uploader)
+                putExtra("duration", duration)
+                putExtra("formattedDuration", formattedDuration)
+                putExtra("description", description)
+                putStringArrayListExtra("tags", tags)
+                putExtra("thumbnailUrl", thumbnailUrl)
             }
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 context.startForegroundService(intent)
@@ -112,9 +127,28 @@ class DownloadService : Service() {
             val container = intent.getStringExtra("container") ?: "mp4"
             val destinationUri = intent.getStringExtra("destinationUri")
             val cookiesPath = intent.getStringExtra("cookiesPath")
+            val videoId = intent.getStringExtra("videoId") ?: ""
+            val uploader = intent.getStringExtra("uploader") ?: ""
+            val duration = intent.getLongExtra("duration", 0L)
+            val formattedDuration = intent.getStringExtra("formattedDuration") ?: ""
+            val description = intent.getStringExtra("description") ?: ""
+            val tags = intent.getStringArrayListExtra("tags") ?: arrayListOf()
+            val thumbnailUrl = intent.getStringExtra("thumbnailUrl")
 
             val option = VideoOption(id = optionId, label = optionLabel, height = height, mode = mode)
-            val job = DownloadJob(url = url, title = title, option = option, container = container)
+            val job = DownloadJob(
+                url = url,
+                title = title,
+                option = option,
+                container = container,
+                videoId = videoId,
+                uploader = uploader,
+                duration = duration,
+                formattedDuration = formattedDuration,
+                description = description,
+                tags = tags,
+                thumbnailUrl = thumbnailUrl
+            )
             _activeJob.value = job
 
             val initialNotification = notificationHelper.buildNotification(
@@ -233,6 +267,43 @@ class DownloadService : Service() {
                     stageMessage = "Download completed successfully!"
                 )
                 notificationHelper.update(job.title, _currentProgress.value)
+
+                // Save to persistent download history
+                try {
+                    val historyManager = DownloadHistoryManager.getInstance(applicationContext)
+                    val localThumb = historyManager.saveDownloadedThumbnail(job.thumbnailUrl, job.videoId)
+                    val isVideo = job.option.mode != "audio" && job.option.mode != "audio_only"
+                    val sizeBytes = finalTarget.length()
+                    val sizeFormatted = if (sizeBytes > 1024 * 1024) {
+                        "%.2f MB".format(sizeBytes / (1024.0 * 1024.0))
+                    } else {
+                        "%.1f KB".format(sizeBytes / 1024.0)
+                    }
+
+                    val downloadedItem = DownloadedItem(
+                        videoId = job.videoId,
+                        title = job.title,
+                        uploader = job.uploader,
+                        duration = job.duration,
+                        formattedDuration = job.formattedDuration,
+                        description = job.description,
+                        tags = job.tags,
+                        thumbnailUrl = job.thumbnailUrl,
+                        localThumbnailPath = localThumb,
+                        isVideo = isVideo,
+                        formatLabel = job.option.label,
+                        container = job.container,
+                        fileSizeFormatted = sizeFormatted,
+                        fileSizeBytes = sizeBytes,
+                        fileUriString = finalSavedPath ?: "",
+                        localFilePath = if (finalSavedPath?.startsWith("content://") == false) (finalSavedPath ?: "") else "",
+                        timestamp = System.currentTimeMillis()
+                    )
+                    historyManager.addItem(downloadedItem)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Failed to save download to history", e)
+                }
+
                 storageHelper.cleanStagingFiles()
             } else {
                 val err = exportResult.exceptionOrNull()?.message ?: "Export to destination failed"

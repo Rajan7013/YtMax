@@ -35,6 +35,13 @@
             </intent-filter>
         </activity>
 
+        <activity
+            android:name=".player.PlayerActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden"
+            android:supportsPictureInPicture="true"
+            android:theme="@style/Theme.RajanDownloader" />
+
         <service
             android:name=".download.DownloadService"
             android:exported="false"
